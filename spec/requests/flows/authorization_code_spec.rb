@@ -228,6 +228,33 @@ feature 'Authorization Code Flow' do
         expect(page).to have_content('The code challenge method must be plain or S256.')
       end
     end
+
+    context 'refresh tokens enabled' do
+      let(:code_challenge) { 'Oz733NtQ0rJP8b04fgZMJMwprn6Iw8sMCT_9bR1q4tA' }
+      let(:code_verifier) { 'a45a9fea-0676-477e-95b1-a40f72ac3cfb' }
+
+      scenario 'mobile app requests an access token with authorization code and S256 code challenge method' do
+        @client.update_attribute :confidential, false
+        visit authorization_endpoint_url(client: @client, code_challenge: code_challenge, code_challenge_method: 'S256')
+        click_on 'Authorize'
+
+        Doorkeeper.configure do
+          use_refresh_token
+        end
+
+        authorization_code = current_params['code']
+        create_access_token authorization_code, @client, code_verifier
+
+        access_token_should_exist_for(@client, @resource_owner)
+
+        should_not_have_json 'error'
+
+        should_have_json 'access_token', Doorkeeper::AccessToken.first.token
+        should_have_json 'refresh_token', Doorkeeper::AccessToken.first.refresh_token
+        should_have_json 'token_type', 'bearer'
+        should_have_json_within 'expires_in', Doorkeeper::AccessToken.first.expires_in, 1
+      end
+    end
   end
 
   context 'when application scopes are present and no scope is passed' do
